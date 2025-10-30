@@ -10,14 +10,8 @@ from typing import Iterator, Optional
 from dataclasses import dataclass
 import re
 
-@dataclass
-class FilterInfo:
-    pattern: Optional[str] = None
-    invert_pattern: bool = False
-    _rx: Optional[re.Pattern[str]] = None
-
-    def compile(self) -> None:
-        self._rx = re.compile(self.pattern) if self.pattern else None
+from filter_logic import FilterInfo, should_keep
+from python_logger.src import concurrent_ingestor
 
 def load_env(path: str = ".env") -> None:
     if dotenv is not None and os.path.exists(path):
@@ -45,16 +39,29 @@ def parse_args() -> argparse.Namespace:
     )
     return parser.parse_args()
 
-def should_keep(line: str, info: FilterInfo) -> bool:
-    if info._rx is None:
-        return True
-    matched = info._rx.search(line) is not None
-    return (not matched) if info.invert_pattern else matched
 
 def filtered_line_reader(file_path: str) -> Iterator[str]:
     with open(file_path, 'r') as f:
         for line in f:
                 yield line.strip()
+
+def batched_filtered_line_reader(
+    file_path: str,
+    batch_size: int = 1_000_000
+) -> Iterator[str]:
+    batch = []
+    reader = filtered_line_reader(file_path)
+    while True:
+        try:
+            batch.append(next(reader))
+        except StopIteration:
+            break
+        if len(batch)>=batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
 
 
 def main():
@@ -64,22 +71,11 @@ def main():
     file_path: str = args.input
     filter_info = FilterInfo(
         pattern = args.filter_pattern,
-        invert_pattern= args.invert
+        invert_pattern= args.invert,
+        output_format=args.output_format
     )
     filter_info.compile()
-    reader = filtered_line_reader(file_path=file_path)
-    ctr = 0
-    while True:
-        try:
-            log_line =next(reader)
-            if should_keep(log_line, filter_info):
-                if args.output_format == "print":
-                    print(log_line)
-                ctr += 1
-        except StopIteration:
-            break
-    if args.output_format == "count":
-        print(ctr)
+    concurrent_ingestor.run(file_path, filter_info, num_workers = 20)
 
 if __name__ == '__main__':
     main()

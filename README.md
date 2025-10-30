@@ -19,6 +19,20 @@ python scripts/generate_logs.py \
   --pattern 'ERROR'
 ```
 ## BENCHMARK RESULTS
+
+### Multi threaded python
+```
+Benchmarking on: testdata/log_1000M.log
+Size: 1048576083 bytes | Lines: 11894546
+Pattern: ERROR
+Runs: 5 (warmup: 1)
+Tool         Runs  real_s(avg)  MB/s(avg)  lines/s(avg)
+-------------------------------------------------------
+python          5        0.128    8179.87      92788520
+grep            5        3.776     277.73       3150412
+awk             5        0.007  155913.60    1768608000
+```
+
 ### Single threaded python 
 ```
 Benchmarking on: testdata/log_1000M.log
